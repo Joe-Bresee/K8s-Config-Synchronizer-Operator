@@ -33,5 +33,6 @@ This project allows me to:
 # Build and run the operator locally
 make install
 make run
+```
 
 readme in progress.
