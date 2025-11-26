@@ -23,9 +23,9 @@ import (
 // EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
 // NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
 
-// sourceSpec describes the source of configuration data for a ConfigSync.
+// SourceSpec describes the source of configuration data for a ConfigSync.
 // Only one of the fields should be set.
-type sourceSpec struct {
+type SourceSpec struct {
 	// Git references a Git repository and path to read the configuration from.
 	Git *GitSource `json:"git,omitempty"`
 	// ConfigMapRef points to a ConfigMap in the cluster to use as the source.
@@ -92,7 +92,7 @@ type ObjectRef struct {
 	Name string `json:"name"`
 
 	// Namespace is the namespace of the referenced object.
-	Namespace string `json:"namespace"`
+	Namespace string `json:"namespace,omitempty"`
 }
 
 // ConfigSyncSpec defines the desired state of ConfigSync
@@ -106,7 +106,7 @@ type ConfigSyncSpec struct {
 	// Source defines where to fetch configuration data from. Only one source
 	// field may be set (git, configMapRef, or secretRef).
 	// +optional
-	Source sourceSpec `json:"source"`
+	Source SourceSpec `json:"source"`
 
 	// Targets is the list of target resources to apply the rendered
 	// configuration to. Each target contains `namespace`, `name`, and `type`.
