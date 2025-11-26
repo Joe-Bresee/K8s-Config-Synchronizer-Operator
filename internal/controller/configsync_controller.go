@@ -49,7 +49,56 @@ type ConfigSyncReconciler struct {
 func (r *ConfigSyncReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	_ = logf.FromContext(ctx)
 
-	// TODO(user): your logic here
+	// Logic of our configsync controller is:
+
+	// Step 1: You always need to Get the object from the API (r.Client.Get(ctx, req.NamespacedName, &configSync)).
+	var configSync configsv1alpha1.ConfigSync
+	if err := r.Get(ctx, req.NamespacedName, &configSync); err != nil {
+		return ctrl.Result{}, client.IgnoreNotFound(err)
+	}
+
+	// Step 2: Handling the source — Apparently there is no XOR validation in kubebuilder so doing this. Only one source can be set per controller.
+	sourceSet := 0
+	if configSync.Spec.Source.Git != nil {
+		sourceSet++
+	}
+	if configSync.Spec.Source.ConfigMapRef != nil {
+		sourceSet++
+	}
+	if configSync.Spec.Source.SecretRef != nil {
+		sourceSet++
+	}
+	if sourceSet != 1 {
+		// Invalid spec: either none or multiple sources set. You should update status conditions to reflect this error.
+		return ctrl.Result{}, nil
+	}
+
+	if configSync.Spec.Source.Git != nil {
+		// Handle Git source logic here
+	}
+	if configSync.Spec.Source.ConfigMapRef != nil {
+		// Handle ConfigMap source logic here
+	}
+	if configSync.Spec.Source.SecretRef != nil {
+		// Handle Secret source logic here
+	}
+
+	// Step 3: The “apply to cluster” logic will vary: for a Git source, you need to clone/read files, parse manifests, then Apply them (usually with client.Apply). For ConfigMap/Secret sources, just read them and apply.
+	for _, target := range configSync.Spec.Targets {
+		// Apply logic for each target
+		_ = target // Placeholder to avoid unused variable error
+	}
+	// Step 4: Update status fields: LastSyncedTime, SourceRevision, AppliedTargets, Conditions. This is standard K8s convention.
+	configSync.Status.LastSyncedTime = &metav1.Time{Time: ctrl.Now()}
+	configSync.Status.AppliedTargets = len(configSync.Spec.Targets)
+	configSync.Status.SourceRevision = revisionSHA
+	// conditions: available, progressing, degraded
+	// You would typically use helper functions to set conditions properly.???
+	if err := r.Status().Update(ctx, &configSync); err != nil {
+		return ctrl.Result{}, err
+	}
+
+	// Step 5: Requeue: you may want to requeue periodically (RefreshInterval) or immediately on failures.
 
 	return ctrl.Result{}, nil
 }
