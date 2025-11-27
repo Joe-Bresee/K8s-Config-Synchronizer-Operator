@@ -203,7 +203,7 @@ func buildAuth(
 				authSecretRef.Namespace, authSecretRef.Name)
 		}
 
-		logger.Info("using HTTPS basic auth")
+		logger.Info("using HTTPS basic auth: found username and password", "namespace", authSecretRef.Namespace, "name", authSecretRef.Name)
 		return &httpAuth.BasicAuth{
 			Username: username,
 			Password: password,
@@ -216,7 +216,7 @@ func buildAuth(
 				authSecretRef.Namespace, authSecretRef.Name)
 		}
 
-		logger.Info("using SSH key auth")
+		logger.Info("using SSH key auth: found private key", "namespace", authSecretRef.Namespace, "name", authSecretRef.Name)
 
 		signer, err := sshAuth.NewPublicKeys("git", key, "")
 		if err != nil {

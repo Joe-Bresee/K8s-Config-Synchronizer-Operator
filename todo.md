@@ -76,3 +76,4 @@ Add compare-SHA logic in your Reconcile loop
 Add server-side apply code for applying manifests -->
 KNOWN HOST SUPPORT
 gitignore for sensitive stuff when testing
+- first probably raw manifest apply support - then include helm support.

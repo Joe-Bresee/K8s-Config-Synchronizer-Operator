@@ -96,6 +96,7 @@ func (r *ConfigSyncReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 			_ = r.Status().Update(ctx, &configSync)
 			return ctrl.Result{}, err
 		}
+
 	}
 	if configSync.Spec.Source.ConfigMapRef != nil {
 		// Handle ConfigMap source logic here

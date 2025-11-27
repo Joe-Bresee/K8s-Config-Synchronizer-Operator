@@ -28,7 +28,7 @@ import (
 type SourceSpec struct {
 	// Git references a Git repository and path to read the configuration from.
 	Git *GitSource `json:"git,omitempty"`
-	// ConfigMapRef points to a ConfigMap in the cluster to use as the source.
+	// ConfigMapRef points to a ConfigMap in the cluster to use as the source. Must be in form key: filename, data: file contents. Use data fields and NOT binaryData.
 	ConfigMapRef *ObjectRef `json:"configMapRef,omitempty"`
 	// SecretRef points to a Secret in the cluster to use as the source.
 	SecretRef *ObjectRef `json:"secretRef,omitempty"`
