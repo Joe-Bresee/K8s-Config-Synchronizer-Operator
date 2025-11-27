@@ -1,4 +1,4 @@
-package gitsource
+package source
 
 import (
 	"context"
@@ -22,7 +22,7 @@ import (
 	configsv1alpha1 "github.com/joe-bresee/config-synchronizer-operator/api/v1alpha1"
 )
 
-func CloneOrUpdate(
+func cloneOrUpdate(
 	ctx context.Context,
 	c client.Client,
 	repoURL, revision, branch, authMethod string,
@@ -83,7 +83,7 @@ func CloneOrUpdate(
 		if err != nil {
 			logger.Error(err, "cached repo appears corrupted; removing")
 			_ = os.RemoveAll(cachePath)
-			return CloneOrUpdate(ctx, c, repoURL, revision, branch, authMethod, authSecretRef)
+			return cloneOrUpdate(ctx, c, repoURL, revision, branch, authMethod, authSecretRef)
 		}
 
 		logger.Info("fetching latest updates from origin")
@@ -102,7 +102,7 @@ func CloneOrUpdate(
 		if err != nil && err != git.NoErrAlreadyUpToDate {
 			logger.Error(err, "fetch failed; repository may be corrupted")
 			_ = os.RemoveAll(cachePath)
-			return CloneOrUpdate(ctx, c, repoURL, revision, branch, authMethod, authSecretRef)
+			return cloneOrUpdate(ctx, c, repoURL, revision, branch, authMethod, authSecretRef)
 		}
 	}
 

@@ -1,4 +1,4 @@
-package cmsource
+package source
 
 import (
 	"context"
@@ -18,7 +18,7 @@ import (
 )
 
 // FetchConfigMap fetches a ConfigMap, writes its keys to a temp dir, and returns a deterministic revision SHA and the path.
-func FetchConfigMap(
+func fetchConfigMap(
 	ctx context.Context,
 	c client.Client,
 	ref *configsv1alpha1.ObjectRef,

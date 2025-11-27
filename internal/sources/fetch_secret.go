@@ -1,4 +1,4 @@
-package secretsource
+package source
 
 import (
 	"context"
@@ -20,7 +20,7 @@ import (
 // FetchSecret fetches a Secret, writes its data keys to a temp dir (as files),
 // and returns a deterministic revision SHA and the temp dir path.
 // Secret values are treated as raw bytes; SHA is computed deterministically.
-func FetchSecret(
+func fetchSecret(
 	ctx context.Context,
 	c client.Client,
 	ref *configsv1alpha1.ObjectRef,

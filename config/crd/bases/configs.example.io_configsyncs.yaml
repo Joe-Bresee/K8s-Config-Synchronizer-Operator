@@ -53,8 +53,9 @@ spec:
                   field may be set (git, configMapRef, or secretRef).
                 properties:
                   configMapRef:
-                    description: ConfigMapRef points to a ConfigMap in the cluster
-                      to use as the source.
+                    description: 'ConfigMapRef points to a ConfigMap in the cluster
+                      to use as the source. Must be in form key: filename, data: file
+                      contents. Use data fields and NOT binaryData.'
                     properties:
                       name:
                         description: Name is the name of the referenced object (ConfigMap
@@ -250,6 +251,10 @@ spec:
                   The status of each condition is one of True, False, or Unknown.
                   LastSyncedTime is the timestamp of the last successful sync operation.
                 format: date-time
+                type: string
+              sourcePath:
+                description: SourcePath records the path within the source repository
+                  that was applied during the last sync.
                 type: string
               sourceRevision:
                 description: |-

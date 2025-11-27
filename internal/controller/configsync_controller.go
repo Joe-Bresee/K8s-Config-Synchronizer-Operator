@@ -18,6 +18,7 @@ package controller
 
 import (
 	"context"
+	"os"
 	"time"
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -27,9 +28,8 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	configsv1alpha1 "github.com/joe-bresee/config-synchronizer-operator/api/v1alpha1"
-	cmsource "github.com/joe-bresee/config-synchronizer-operator/internal/sources/configmap"
-	gitsource "github.com/joe-bresee/config-synchronizer-operator/internal/sources/git"
-	secretsource "github.com/joe-bresee/config-synchronizer-operator/internal/sources/secret"
+	apply "github.com/joe-bresee/config-synchronizer-operator/internal/apply"
+	source "github.com/joe-bresee/config-synchronizer-operator/internal/sources"
 )
 
 // ConfigSyncReconciler reconciles a ConfigSync object
@@ -64,77 +64,41 @@ func (r *ConfigSyncReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	// Step 2: Handling the source — Apparently there is no XOR validation in kubebuilder so doing this. Only one source can be set per controller.
-	sourceSet := 0
-	if configSync.Spec.Source.Git != nil {
-		sourceSet++
-	}
-	if configSync.Spec.Source.ConfigMapRef != nil {
-		sourceSet++
-	}
-	if configSync.Spec.Source.SecretRef != nil {
-		sourceSet++
-	}
-	if sourceSet != 1 {
-		setCondition(&configSync.Status, "Degraded", metav1.ConditionTrue, "InvalidSource", "Exactly one source must be specified")
+	// Step 2: Handling the source — fetch data from configured source. Only one source is permitted.
+	revisionSHA, sourcePath, err := source.FetchSource(&configSync, ctx, r.Client)
+	if err != nil {
+		setCondition(&configSync.Status, "Degraded", metav1.ConditionTrue, "SourceFetchFailed", err.Error())
 		_ = r.Status().Update(ctx, &configSync)
+		return ctrl.Result{}, err
+	}
+
+	// If the source is an in-cluster object (ConfigMap/Secret) we wrote files to a temp dir
+	// and should clean them up after reconcile. For Git sources we use a cache path and do not remove it.
+	if configSync.Spec.Source.Git == nil {
+		defer func() {
+			if sourcePath != "" {
+				_ = os.RemoveAll(sourcePath)
+			}
+		}()
+	}
+
+	// Step 3: apply to cluster logic. At this point all source data is local and ready to be applied.
+	// check revisionSHA of source against status to see if we need to re-apply
+	if configSync.Status.SourceRevision == revisionSHA {
+		// No changes, nothing to do
 		return ctrl.Result{}, nil
 	}
 
-	var revisionSHA string
-	var sourcePath string
-	if configSync.Spec.Source.Git != nil {
-		var err error
-		revisionSHA, sourcePath, err = gitsource.CloneOrUpdate(
-			ctx,
-			r.Client,
-			configSync.Spec.Source.Git.RepoURL,
-			configSync.Spec.Source.Git.Revision,
-			configSync.Spec.Source.Git.Branch,
-			configSync.Spec.Source.Git.AuthMethod,
-			configSync.Spec.Source.Git.AuthSecretRef,
-		)
-		if err != nil {
-			setCondition(&configSync.Status, "Degraded", metav1.ConditionTrue, "GitCloneFailed", err.Error())
-			_ = r.Status().Update(ctx, &configSync)
-			return ctrl.Result{}, err
-		}
-
-	}
-	if configSync.Spec.Source.ConfigMapRef != nil {
-		// Handle ConfigMap source logic here
-		var err error
-		revisionSHA, sourcePath, err = cmsource.FetchConfigMap(
-			ctx,
-			r.Client,
-			configSync.Spec.Source.ConfigMapRef,
-		)
-		if err != nil {
-			setCondition(&configSync.Status, "Degraded", metav1.ConditionTrue, "ConfigMapFetchFailed", err.Error())
-			_ = r.Status().Update(ctx, &configSync)
-			return ctrl.Result{}, err
-		}
-	}
-	if configSync.Spec.Source.SecretRef != nil {
-		// Handle Secret source logic here
-		var err error
-		revisionSHA, sourcePath, err = secretsource.FetchSecret(
-			ctx,
-			r.Client,
-			configSync.Spec.Source.SecretRef,
-		)
-		if err != nil {
-			setCondition(&configSync.Status, "Degraded", metav1.ConditionTrue, "SecretFetchFailed", err.Error())
-			_ = r.Status().Update(ctx, &configSync)
-			return ctrl.Result{}, err
-		}
-	}
-
-	// Step 3: The “apply to cluster” logic will vary: for a Git source, you need to clone/read files, parse manifests, then Apply them (usually with client.Apply). For ConfigMap/Secret sources, just read them and apply.
+	// apply logic for each target
 	for _, target := range configSync.Spec.Targets {
-		// Apply logic for each target
-		_ = target // Placeholder to avoid unused variable error
+		err := apply.ApplyTarget(ctx, r.Client, sourcePath, target)
+		if err != nil {
+			setCondition(&configSync.Status, "Degraded", metav1.ConditionTrue, "ApplyFailed", err.Error())
+			_ = r.Status().Update(ctx, &configSync)
+			return ctrl.Result{}, err
+		}
 	}
+
 	// Step 4: Update status fields: LastSyncedTime, SourceRevision, AppliedTargets, Conditions. This is standard K8s convention.
 	configSync.Status.LastSyncedTime = &metav1.Time{Time: metav1.Now().Time}
 	configSync.Status.AppliedTargets = len(configSync.Spec.Targets)
@@ -144,7 +108,7 @@ func (r *ConfigSyncReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	if err := r.Status().Update(ctx, &configSync); err != nil {
 		return ctrl.Result{}, err
 	}
-	// Step 5: Requeue: you may want to requeue periodically (RefreshInterval) or immediately on failures.
+	// Step 5: Requeue
 	var requeueAfter time.Duration
 	if configSync.Spec.RefreshInterval != "" {
 		d, err := time.ParseDuration(configSync.Spec.RefreshInterval)
@@ -172,12 +136,20 @@ func setCondition(status *configsv1alpha1.ConfigSyncStatus, conditionType string
 	now := metav1.Now()
 	for i, c := range status.Conditions {
 		if c.Type == conditionType {
-			status.Conditions[i] = metav1.Condition{
-				Type:               conditionType,
-				Status:             statusValue,
-				Reason:             reason,
-				Message:            message,
-				LastTransitionTime: now,
+			// Only update LastTransitionTime when the status actually changes.
+			if c.Status == statusValue && c.Reason == reason && c.Message == message {
+				// No meaningful change; leave LastTransitionTime as-is but update fields for consistency.
+				status.Conditions[i].Status = c.Status
+				status.Conditions[i].Reason = c.Reason
+				status.Conditions[i].Message = c.Message
+			} else {
+				status.Conditions[i] = metav1.Condition{
+					Type:               conditionType,
+					Status:             statusValue,
+					Reason:             reason,
+					Message:            message,
+					LastTransitionTime: now,
+				}
 			}
 			return
 		}
