@@ -27,7 +27,7 @@ import (
 	logf "sigs.k8s.io/controller-runtime/pkg/log"
 
 	configsv1alpha1 "github.com/joe-bresee/config-synchronizer-operator/api/v1alpha1"
-	"github.com/joe-bresee/config-synchronizer-operator/internal/sources"
+	sources "github.com/joe-bresee/config-synchronizer-operator/internal/sources/git"
 )
 
 // ConfigSyncReconciler reconciles a ConfigSync object
@@ -79,8 +79,10 @@ func (r *ConfigSyncReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return ctrl.Result{}, nil
 	}
 
+	var revisionSHA string
 	if configSync.Spec.Source.Git != nil {
-		revisionSHA, err := sources.CloneOrUpdate(
+		var err error
+		revisionSHA, err = sources.CloneOrUpdate(
 			ctx,
 			r.Client,
 			configSync.Spec.Source.Git.RepoURL,

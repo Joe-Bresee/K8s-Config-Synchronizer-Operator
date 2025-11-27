@@ -80,10 +80,11 @@ spec:
                         - https
                         - none
                         type: string
-                      passwordSecretRef:
+                      authSecretRef:
                         description: |-
-                          PasswordSecretRef references a Secret that contains the password when
-                          `AuthMethod=https` and basic auth is used.
+                          AuthSecretRef references a Secret that contains an SSH private key or basic auth credentials when
+                          `AuthMethod=ssh` or `AuthMethod=https`. The Secret should contain the key under a standard key
+                          name (e.g., `id_rsa` for SSH or `username` and `password` for HTTPS).
                         properties:
                           name:
                             description: Name is the name of the referenced object
@@ -96,12 +97,17 @@ spec:
                         required:
                         - name
                         type: object
+                      branch:
+                        description: |-
+                          Branch is the Git branch to checkout. If unspecified, the operator will
+                          default to the repository's default branch.
+                        type: string
                       path:
                         description: |-
                           Path is the repository-relative path to the file containing the configuration
                           (for example `config/app.yaml`). This field is required when `git` is used.
                         type: string
-                      repo:
+                      repoURL:
                         description: |-
                           Repo is the HTTPS or SSH URL of the Git repository to clone (for example
                           `https://github.com/myorg/configs.git`). This field is required when `git` is used.
@@ -111,42 +117,9 @@ spec:
                           Revision is an optional Git revision (branch, tag, or commit SHA). If
                           unspecified, the operator will default to the repository's default branch.
                         type: string
-                      sshKeySecretRef:
-                        description: |-
-                          SSHKeySecretRef references a Secret that contains an SSH private key when
-                          `AuthMethod=ssh`. The Secret should contain the key under a standard key
-                          name (e.g., `id_rsa`).
-                        properties:
-                          name:
-                            description: Name is the name of the referenced object
-                              (ConfigMap or Secret).
-                            type: string
-                          namespace:
-                            description: Namespace is the namespace of the referenced
-                              object.
-                            type: string
-                        required:
-                        - name
-                        type: object
-                      usernameSecretRef:
-                        description: |-
-                          UsernameSecretRef references a Secret that contains the username when
-                          `AuthMethod=https` and basic auth is used.
-                        properties:
-                          name:
-                            description: Name is the name of the referenced object
-                              (ConfigMap or Secret).
-                            type: string
-                          namespace:
-                            description: Namespace is the namespace of the referenced
-                              object.
-                            type: string
-                        required:
-                        - name
-                        type: object
                     required:
                     - path
-                    - repo
+                    - repoURL
                     type: object
                   secretRef:
                     description: SecretRef points to a Secret in the cluster to use
