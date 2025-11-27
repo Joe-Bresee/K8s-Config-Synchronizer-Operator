@@ -61,3 +61,9 @@ Usage
 - Recommended immediate actions: complete items 1–3 to scaffold the project, then implement 4 (Git fetcher) and 5 (validation).
 
 If you'd like, I can scaffold parts of this (CRD types, controller skeleton, or `internal/source`), or follow whichever step you pick next.
+
+
+<!-- idea: rollback support -->
+<!-- multi-branch / env support -->
+<!-- go back and fix kubebuilder validation for branch, revision and add branch to sync -->
+<!-- //right now assuming https. Will need to add functionality for ssh later. Will need to make/reade secret for auth -->

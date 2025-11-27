@@ -35,15 +35,15 @@ type SourceSpec struct {
 }
 
 type GitSource struct {
-	// Path is the repository-relative path to the file containing the configuration
-	// (for example `config/app.yaml`). This field is required when `git` is used.
-	// +kubebuilder:validation:Required
-	Path string `json:"path"`
-
 	// Repo is the HTTPS or SSH URL of the Git repository to clone (for example
 	// `https://github.com/myorg/configs.git`). This field is required when `git` is used.
 	// +kubebuilder:validation:Required
 	Repo string `json:"repo"`
+
+	// Path is the repository-relative path to the file containing the configuration
+	// (for example `config/app.yaml`). This field is required when `git` is used.
+	// +kubebuilder:validation:Required
+	Path string `json:"path"`
 
 	// Revision is an optional Git revision (branch, tag, or commit SHA). If
 	// unspecified, the operator will default to the repository's default branch.
