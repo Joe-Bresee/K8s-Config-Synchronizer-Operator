@@ -18,7 +18,9 @@ package controller
 
 import (
 	"context"
+	"time"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -26,6 +28,8 @@ import (
 
 	configsv1alpha1 "github.com/joe-bresee/config-synchronizer-operator/api/v1alpha1"
 )
+
+var revisionSHA = "unknown" // overridden at build time with -ldflags if desired
 
 // ConfigSyncReconciler reconciles a ConfigSync object
 type ConfigSyncReconciler struct {
@@ -69,12 +73,13 @@ func (r *ConfigSyncReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		sourceSet++
 	}
 	if sourceSet != 1 {
-		// Invalid spec: either none or multiple sources set. You should update status conditions to reflect this error.
+		setCondition(&configSync.Status, "Degraded", metav1.ConditionTrue, "InvalidSource", "Exactly one source must be specified")
+		_ = r.Status().Update(ctx, &configSync)
 		return ctrl.Result{}, nil
 	}
 
 	if configSync.Spec.Source.Git != nil {
-		// Handle Git source logic here
+		// Handle Git source logic here use go-git
 	}
 	if configSync.Spec.Source.ConfigMapRef != nil {
 		// Handle ConfigMap source logic here
@@ -89,18 +94,27 @@ func (r *ConfigSyncReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		_ = target // Placeholder to avoid unused variable error
 	}
 	// Step 4: Update status fields: LastSyncedTime, SourceRevision, AppliedTargets, Conditions. This is standard K8s convention.
-	configSync.Status.LastSyncedTime = &metav1.Time{Time: ctrl.Now()}
+	configSync.Status.LastSyncedTime = &metav1.Time{Time: metav1.Now().Time}
 	configSync.Status.AppliedTargets = len(configSync.Spec.Targets)
 	configSync.Status.SourceRevision = revisionSHA
-	// conditions: available, progressing, degraded
-	// You would typically use helper functions to set conditions properly.???
+
 	if err := r.Status().Update(ctx, &configSync); err != nil {
 		return ctrl.Result{}, err
 	}
-
 	// Step 5: Requeue: you may want to requeue periodically (RefreshInterval) or immediately on failures.
+	var requeueAfter time.Duration
+	if configSync.Spec.RefreshInterval != "" {
+		d, err := time.ParseDuration(configSync.Spec.RefreshInterval)
+		if err != nil {
+			// Invalid duration string — mark degraded and do not requeue.
+			setCondition(&configSync.Status, "Degraded", metav1.ConditionTrue, "InvalidRefreshInterval", "RefreshInterval must be a valid duration string (e.g. \"30s\", \"5m\")")
+			_ = r.Status().Update(ctx, &configSync)
+			return ctrl.Result{}, nil
+		}
+		requeueAfter = d
+	}
 
-	return ctrl.Result{}, nil
+	return ctrl.Result{RequeueAfter: requeueAfter}, nil
 }
 
 // SetupWithManager sets up the controller with the Manager.
@@ -110,3 +124,28 @@ func (r *ConfigSyncReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Named("configsync").
 		Complete(r)
 }
+
+func setCondition(status *configsv1alpha1.ConfigSyncStatus, conditionType string, statusValue metav1.ConditionStatus, reason, message string) {
+	now := metav1.Now()
+	for i, c := range status.Conditions {
+		if c.Type == conditionType {
+			status.Conditions[i] = metav1.Condition{
+				Type:               conditionType,
+				Status:             statusValue,
+				Reason:             reason,
+				Message:            message,
+				LastTransitionTime: now,
+			}
+			return
+		}
+	}
+	status.Conditions = append(status.Conditions, metav1.Condition{
+		Type:               conditionType,
+		Status:             statusValue,
+		Reason:             reason,
+		Message:            message,
+		LastTransitionTime: now,
+	})
+}
+
+// DONT FORGET ADD ERR HANDLING TO DEGRADED FOR ANY STEP POSSIBLE OF FAILING
