@@ -15,7 +15,7 @@ import (
 )
 
 // DryRunEnabled controls whether ApplyTarget performs a server-side dry-run
-var DryRunEnabled = true
+var DryRunEnabled = false
 
 func ApplyTarget(ctx context.Context, c client.Client, sourcePath string, target configsv1alpha1.TargetRef) error {
 	logger := log.FromContext(ctx)
