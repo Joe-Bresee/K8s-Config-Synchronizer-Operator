@@ -3,6 +3,8 @@
 
 A Kubernetes operator that synchronizes configuration from a source (Git repository, ConfigMap, or Secret) into target resources on a cluster.
 
+as of this readme update commit, I've been able to get a functional syncing of a resource defined in a git source which is awesome. On initial start, it's able to apply the new manifest, and when I edited the deployment manifest in my test git source, my operator was able to detect the change during its reconciliation loop and apply it to the cluster. There's no pruning at the moment which might be a nice touch, and I think I may need to re-design my CR to be a bit more adaptable to manifest changes.
+
 ## Motivation
 
 During my internship, I worked extensively with Kubernetes: deploying Helm charts, routing Ingress, debugging Pods, and creating cloud-native workflows in Argo Workflows. I found it fascinating and really wanted to explore Kubernetes internals further.
