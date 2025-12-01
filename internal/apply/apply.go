@@ -15,13 +15,11 @@ import (
 )
 
 // DryRunEnabled controls whether ApplyTarget performs a server-side dry-run
-// before applying. Tests can set this to false to avoid fake-client dry-run issues.
 var DryRunEnabled = true
 
 func ApplyTarget(ctx context.Context, c client.Client, sourcePath string, target configsv1alpha1.TargetRef) error {
 	logger := log.FromContext(ctx)
 
-	// 1. List all YAML files
 	files, err := os.ReadDir(sourcePath)
 	if err != nil {
 		return fmt.Errorf("failed to list source directory: %w", err)
@@ -38,15 +36,13 @@ func ApplyTarget(ctx context.Context, c client.Client, sourcePath string, target
 			return fmt.Errorf("failed to read file %s: %w", filePath, err)
 		}
 
-		// 2. Handle multi-document YAML
-		docs := strings.Split(string(data), "\n---")
-		for _, doc := range docs {
+		docs := strings.SplitSeq(string(data), "\n---")
+		for doc := range docs {
 			doc = strings.TrimSpace(doc)
 			if doc == "" {
 				continue
 			}
 
-			// 3. Decode into Unstructured object
 			obj := &unstructured.Unstructured{}
 			jsonData, err := yaml.YAMLToJSON([]byte(doc))
 			if err != nil {
@@ -56,15 +52,13 @@ func ApplyTarget(ctx context.Context, c client.Client, sourcePath string, target
 				return fmt.Errorf("failed to unmarshal object in %s: %w", filePath, err)
 			}
 
-			// 4. Override namespace if object is namespaced
 			if target.Namespace != "" {
 				obj.SetNamespace(target.Namespace)
 			}
 
-			// 4.5 Clean metadata and status fields that must not be present for server-side apply/dry-run.
+			// helper function to ensure metadata doesn't exist in the object and other cleanup to ensure k apply accepts obj
 			cleanObjectForApply(obj)
 
-			// 5. Dry-run validation: perform a server-side dry-run apply first to catch admission/validation errors
 			applyOpts := []client.PatchOption{client.ForceOwnership, client.FieldOwner("configsync")}
 			dryRunOpts := append(applyOpts, client.DryRunAll)
 
@@ -76,7 +70,6 @@ func ApplyTarget(ctx context.Context, c client.Client, sourcePath string, target
 				}
 			}
 
-			// 6. Actual apply
 			if err := c.Patch(ctx, obj, client.Apply, applyOpts...); err != nil {
 				return fmt.Errorf("failed to apply %s from %s: %w",
 					obj.GetKind(), filePath, err)
@@ -94,12 +87,7 @@ func ApplyTarget(ctx context.Context, c client.Client, sourcePath string, target
 	return nil
 }
 
-// cleanObjectForApply removes fields that should not be sent to the API server
-// when performing server-side apply or dry-run. In particular, some objects
-// committed to repositories may include `metadata.managedFields` or other
-// server-populated metadata which causes the API server to reject requests
-// (e.g. "metadata.managedFields must be nil"). This function removes those
-// fields in-place on the given Unstructured object.
+// cleanObjectForApply removes metadata fields that must not be sent to the API server
 func cleanObjectForApply(obj *unstructured.Unstructured) {
 	if obj == nil {
 		return
@@ -109,24 +97,18 @@ func cleanObjectForApply(obj *unstructured.Unstructured) {
 	// Remove top-level status if present
 	delete(content, "status")
 
-	// Clean metadata map
-	// remove known server-populated metadata fields and recursively strip any
-	// nested managedFields that might appear in unexpected places.
+	// Recursively remove server-populated fields
 	removeManagedFieldsRecursive(content)
 
-	// write back content to object
+	// Write back content
 	obj.SetUnstructuredContent(content)
 }
 
-// removeManagedFieldsRecursive walks an object represented as arbitrary
-// interface{} (maps and slices) and removes keys named "managedFields",
-// and also removes common server-populated metadata fields under any
-// "metadata" map. This is defensive: some manifests may accidentally
-// contain full kubectl output with managedFields embedded.
+// removeManagedFieldsRecursive removes managedFields and other server-populated metadata recursively
 func removeManagedFieldsRecursive(v interface{}) {
 	switch t := v.(type) {
 	case map[string]interface{}:
-		// If this map has metadata, clean known fields there.
+		// Remove metadata.managedFields and common server-populated fields. maybe there's a better way to do all of this?
 		if metaI, ok := t["metadata"]; ok {
 			if meta, ok := metaI.(map[string]interface{}); ok {
 				delete(meta, "managedFields")
@@ -138,26 +120,14 @@ func removeManagedFieldsRecursive(v interface{}) {
 				t["metadata"] = meta
 			}
 		}
-		// Remove managedFields at this level if present
+		// Remove any top-level managedFields key
 		delete(t, "managedFields")
-
-		// Recurse into all values
-		for _, vv := range t {
-			removeManagedFieldsRecursive(vv)
+		for _, v := range t {
+			removeManagedFieldsRecursive(v)
 		}
 	case []interface{}:
 		for _, e := range t {
 			removeManagedFieldsRecursive(e)
 		}
-	default:
-		// primitives: nothing to do
 	}
 }
-
-// No rendering (not Helm)
-
-// No Kustomize
-
-// No drift detection (SSA handles merge)
-
-// No pruning of deleted files yet (add later if desired)
