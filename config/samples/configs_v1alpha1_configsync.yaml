@@ -19,4 +19,4 @@ spec:
     - namespace: default
       name: test-deploy
       type: Deployment
-  refreshInterval: "1m0s"
+  refreshInterval: "5s"

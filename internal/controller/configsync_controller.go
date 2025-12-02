@@ -56,17 +56,17 @@ type ConfigSyncReconciler struct {
 // For more details, check Reconcile and its Result here:
 // - https://pkg.go.dev/sigs.k8s.io/controller-runtime@v0.22.4/pkg/reconcile
 func (r *ConfigSyncReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
-	_ = logf.FromContext(ctx)
+	log := logf.FromContext(ctx)
 
-	// Logic of our configsync controller is:
-
-	// Step 1: You always need to Get the object from the API (r.Client.Get(ctx, req.NamespacedName, &configSync)).
+	// Fetch the CR
 	var configSync configsv1alpha1.ConfigSync
 	if err := r.Get(ctx, req.NamespacedName, &configSync); err != nil {
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	// Step 2: Handling the source — fetch data from configured source. Only one source is permitted.
+	// --------------------------------------------------------------
+	// Step 1: Fetch source and determine revision
+	// --------------------------------------------------------------
 	revisionSHA, sourcePath, err := source.FetchSource(&configSync, ctx, r.Client)
 	if err != nil {
 		setCondition(&configSync.Status, "Degraded", metav1.ConditionTrue, "SourceFetchFailed", err.Error())
@@ -74,35 +74,39 @@ func (r *ConfigSyncReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 		return ctrl.Result{}, err
 	}
 
-	// If the source is an in-cluster object (ConfigMap/Secret) we wrote files to a temp dir
-	// and should clean them up after reconcile. For Git sources we use a cache path and do not remove it.
-	if configSync.Spec.Source.Git == nil {
-		defer func() {
-			if sourcePath != "" {
-				_ = os.RemoveAll(sourcePath)
+	// Cleanup temp directories if not Git
+	if configSync.Spec.Source.Git == nil && sourcePath != "" {
+		defer os.RemoveAll(sourcePath)
+	}
+
+	// --------------------------------------------------------------
+	// Step 2: Determine if we need to apply
+	// --------------------------------------------------------------
+	previousRevision := configSync.Status.SourceRevision
+	shouldApply := previousRevision != revisionSHA
+
+	if shouldApply {
+		log.Info("Source revision changed — applying", "old", previousRevision, "new", revisionSHA)
+
+		// Apply to all targets
+		for _, target := range configSync.Spec.Targets {
+			if err := apply.ApplyTarget(ctx, r.Client, sourcePath, target); err != nil {
+				setCondition(&configSync.Status, "Degraded", metav1.ConditionTrue, "ApplyFailed", err.Error())
+				_ = r.Status().Update(ctx, &configSync)
+				return ctrl.Result{}, err
 			}
-		}()
-	}
-
-	// Step 3: apply to cluster logic. At this point all source data is local and ready to be applied.
-	// check revisionSHA of source against status to see if we need to re-apply
-	if configSync.Status.SourceRevision == revisionSHA {
-		// No changes, nothing to do
-		return ctrl.Result{}, nil
-	}
-
-	// apply logic for each target
-	for _, target := range configSync.Spec.Targets {
-		err := apply.ApplyTarget(ctx, r.Client, sourcePath, target)
-		if err != nil {
-			setCondition(&configSync.Status, "Degraded", metav1.ConditionTrue, "ApplyFailed", err.Error())
-			_ = r.Status().Update(ctx, &configSync)
-			return ctrl.Result{}, err
 		}
+
+		// Apply succeeded — mark condition
+		setCondition(&configSync.Status, "Degraded", metav1.ConditionFalse, "ApplySucceeded", "All targets applied successfully")
+	} else {
+		log.Info("No changes detected — skipping apply", "revision", revisionSHA)
 	}
 
-	// Step 4: Update status fields: LastSyncedTime, SourceRevision, AppliedTargets, Conditions. This is standard K8s convention.
-	configSync.Status.LastSyncedTime = &metav1.Time{Time: metav1.Now().Time}
+	// --------------------------------------------------------------
+	// Step 3: Always update status AFTER apply decision
+	// --------------------------------------------------------------
+	configSync.Status.LastSyncedTime = &metav1.Time{Time: time.Now()}
 	configSync.Status.AppliedTargets = len(configSync.Spec.Targets)
 	configSync.Status.SourceRevision = revisionSHA
 	configSync.Status.SourcePath = sourcePath
@@ -110,23 +114,27 @@ func (r *ConfigSyncReconciler) Reconcile(ctx context.Context, req ctrl.Request) 
 	if err := r.Status().Update(ctx, &configSync); err != nil {
 		return ctrl.Result{}, err
 	}
-	// Step 5: Requeue
-	var requeueAfter time.Duration
+
+	// --------------------------------------------------------------
+	// Step 4: Compute requeue interval
+	// --------------------------------------------------------------
+	requeueAfter := 30 * time.Second // default
 	if configSync.Spec.RefreshInterval != "" {
 		d, err := time.ParseDuration(configSync.Spec.RefreshInterval)
 		if err != nil {
-			// Invalid duration string — mark degraded and do not requeue.
-			setCondition(&configSync.Status, "Degraded", metav1.ConditionTrue, "InvalidRefreshInterval", "RefreshInterval must be a valid duration string (e.g. \"30s\", \"5m\")")
+			setCondition(&configSync.Status, "Degraded", metav1.ConditionTrue, "InvalidRefreshInterval", "RefreshInterval must be a valid duration (e.g. 30s, 5m)")
 			_ = r.Status().Update(ctx, &configSync)
 			return ctrl.Result{}, nil
 		}
 		requeueAfter = d
 	}
 
+	log.Info("Reconcile completed", "requeueAfter", requeueAfter.String())
 	return ctrl.Result{RequeueAfter: requeueAfter}, nil
 }
 
-// SetupWithManager sets up the controller with the Manager.
+// SetupWithManager
+// --------------------------------------------------------------
 func (r *ConfigSyncReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&configsv1alpha1.ConfigSync{}).
@@ -134,28 +142,23 @@ func (r *ConfigSyncReconciler) SetupWithManager(mgr ctrl.Manager) error {
 		Complete(r)
 }
 
+// Condition helper
+// --------------------------------------------------------------
 func setCondition(status *configsv1alpha1.ConfigSyncStatus, conditionType string, statusValue metav1.ConditionStatus, reason, message string) {
 	now := metav1.Now()
 	for i, c := range status.Conditions {
 		if c.Type == conditionType {
-			// Only update LastTransitionTime when the status actually changes.
-			if c.Status == statusValue && c.Reason == reason && c.Message == message {
-				// No meaningful change; leave LastTransitionTime as-is but update fields for consistency.
-				status.Conditions[i].Status = c.Status
-				status.Conditions[i].Reason = c.Reason
-				status.Conditions[i].Message = c.Message
-			} else {
-				status.Conditions[i] = metav1.Condition{
-					Type:               conditionType,
-					Status:             statusValue,
-					Reason:             reason,
-					Message:            message,
-					LastTransitionTime: now,
-				}
+			status.Conditions[i] = metav1.Condition{
+				Type:               conditionType,
+				Status:             statusValue,
+				Reason:             reason,
+				Message:            message,
+				LastTransitionTime: now,
 			}
 			return
 		}
 	}
+
 	status.Conditions = append(status.Conditions, metav1.Condition{
 		Type:               conditionType,
 		Status:             statusValue,
@@ -164,5 +167,3 @@ func setCondition(status *configsv1alpha1.ConfigSyncStatus, conditionType string
 		LastTransitionTime: now,
 	})
 }
-
-// DONT FORGET ADD ERR HANDLING TO DEGRADED FOR ANY STEP POSSIBLE OF FAILING
