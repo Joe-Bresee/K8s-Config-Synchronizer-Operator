@@ -1,9 +1,9 @@
 *This project is in progress*
 # Config-Synchronizer-Operator
 
-A Kubernetes operator that synchronizes configuration from a source (Git repository, ConfigMap, or Secret) into target resources on a cluster.
+A Kubernetes operator that synchronizes configuration from a Git source into target resources on a cluster.
 
-as of this readme update commit, I've been able to get a functional syncing of a resource defined in a git source which is awesome. On initial start, it's able to apply the new manifest, and when I edited the deployment manifest in my test git source, my operator was able to detect the change during its reconciliation loop and apply it to the cluster. There's no pruning at the moment which might be a nice touch, and I think I may need to re-design my CR to be a bit more adaptable to manifest changes.
+I have a functional reconciliation that syncs every refresh_interval correctly and applies the made changes, and gracefully logs errors on bad-syntaxed synced manifests.
 
 ## Motivation
 
@@ -18,32 +18,34 @@ This project allows me to:
  
 MVP notes
  - This operator currently applies raw manifests from the configured source directly to the cluster.
- - Templating/rendering (Helm/Kustomize/text templates) is intentionally deferred for the MVP. See `todo.md` for planned templating work.
+ - Templating/rendering (Helm/Kustomize/text templates) is intentionally deferred for the MVP. See `todo.md` or `requirements.md` for planned templating work.
  - Runtime validation: the operator performs a server-side dry-run before applying manifests to catch admission/validation errors. This behavior can be disabled for tests.
 - Understand reconciliation loops and GitOps workflows  
 - learn how to use kubeapi and strengthen my understanding of neceessary rbacs and kubernetes interactions
 - learn how to do go authentication via https and ssh
 - going to learn how to support ca cert checking
+- learn how to think about deployment lifecycles, gitops methodologies, environemtns/cluster/multi-tenancy
 
 ## Features
 
 - Watch a configuration source:
   - Git repository (optionally with SSH or HTTPS authentication)
-  - ConfigMap
-  - Secret
 - Reconcile resources on a configurable refresh interval
 - Maintain status conditions:
   - `Available`: configuration successfully applied
   - `Progressing`: reconciliation is ongoing
   - `Degraded`: errors detected (invalid source, apply failures, etc.)
-- Apply changes to multiple target ConfigMaps or Secrets
+- Apply changes to multiple targets
 
-## Installation
+ ## Technologies
 
-```bash
-# Build and run the operator locally
-make install
-make run
-```
+ - Language: Go (module-based project)
+ - Operator framework: Kubebuilder / controller-runtime
+ - Git library: `go-git` for cloning and fetching repositories
+ - YAML parsing: `sigs.k8s.io/yaml`
+ - Build & tooling: `Makefile`, `go` toolchain, `kustomize` for manifests
+ - Local testing: `kind` for local Kubernetes clusters, Docker for images
+
+ readme in progress. i updated reamde. wdu thnk (See <attachments> above for file contents. You may not need to search or read the file again.)
 
 readme in progress.

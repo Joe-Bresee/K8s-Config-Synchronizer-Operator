@@ -5,12 +5,14 @@ Build a Kubernetes operator that:
 - Watches a `ConfigSync` Custom Resource (CR)
 - Fetches configuration from a source (Git repo)
 - Optionally applies templating or transformations
-- Synchronizes it into one or more target ConfigMaps or Secrets across namespaces
-- Updates `.status` with sync results
+- Synchronizes it into CR-defined kubernetes resource
+- Effective logging and status details, maybe metrics endpoint for observability.
+- End Of Project: Good presentation, professional-looking github repo project. Maybe a demo youtube video to go along with it.
 
 ---
 
 ## CRD: ConfigSync
+- TODO: I want a more loosely defined CR - right now I need to define a CR target with type deployment if my gitsource has a deployment type - which seems a little tight and unneeded. I am going to spend some time designing the configsync CR a bit more - also nede to think about multiple resource deployments, maybe multi-repo/tenancy/env.
 
 ### spec
 - `source`
@@ -20,7 +22,7 @@ Build a Kubernetes operator that:
     - `revision` (string, optional, default `main`)
 -- `targets` (list)
 - `namespace`
-- `type` (enum: `ConfigMap` or `Secret`)
+- `type` `deployment`, etc
 - `name`
 - `key` (optional, for Secret)
 - `refreshInterval` (string, optional)
@@ -36,15 +38,8 @@ Build a Kubernetes operator that:
 ## Operator Behavior
 
 ### Source Fetching
-- TODO: `fetch_source(configsync: ConfigSync) -> dict`
-- If Git: clone or pull, read file at `spec.source.git.path`
-- Return dictionary of configuration
-
-### Validation
-- TODO: `validate_config(data: dict) -> bool`
-- Ensure YAML/JSON is valid
-- Optionally enforce schema rules
-- Raise error or update `.status.conditions` on failure
+- Fetches Git source defined in ConfigSync CR and if remote has a more recent hash, re-syncs repository code with local temp repo.
+- Caches difference for efficiency / in case there's no updates.
 
 ### Templating / Transformation
 - TODO: `render_template(data: dict, target: dict) -> dict`
@@ -53,21 +48,25 @@ Build a Kubernetes operator that:
 - Optional: allow per-target overrides
 
 ### Target Application
-- TODO: `apply_target(target: dict, data: dict)`
-- Create or patch ConfigMap/Secret
-- Preserve unmanaged keys unless `overwrite: true`
-- Update `.status` after successful apply
+- Applies manifest changes to target defined in the ConfigSync CR, returns Errors if any occur - reports success
 
 ### Reconciliation Triggers
-- On CR create/update/delete
+- TODO: On CR create/update/delete
 - On refresh interval
-- On source changes (Git polling or ConfigMap/Secret watch)
 
 ### Error Handling
 - Log errors with structured logging
 - Update `.status.conditions` for Synced, Failed, InvalidSource
-- Emit Kubernetes events
-- Retry with exponential backoff
+- TODO: Emit Kubernetes events
+- TODO: Retry with exponential backoff
+
+### TODO: Rollbacks
+- implement rollback functionality to most previous/specific commit SHA.
+
+### TODO: pruning & garbage collection
+
+### TODO: determine apply semantics
+- is this a server-side apply only, or client side?
 
 ---
 
@@ -124,16 +123,10 @@ refreshInterval: 10m
 - Webhook triggers for Git push events
 - SOPS/KMS encrypted secret support
 - Multi-cluster sync
+- rollback
+- multi env/ tenancy
 - Tekton pipeline config integration
 - Jsonnet/Kustomize transformations
-
----
-
-## Suggested TODOs for Copilot
-- Create CRD YAML (`apiVersion: configs.example.io/v1alpha1`)
-- Implement `fetch_source()` for Git and in-cluster objects
-- Implement `validate_config()`
-- Implement `render_template()`
-- Implement `apply_target()`
-- Implement main reconcile loop
-- Implement status updates and condition reporting
+- pruning
+- templating
+- helm support
