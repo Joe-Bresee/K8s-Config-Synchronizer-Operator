@@ -1,5 +1,8 @@
 # Config-Synchronizer-Operator
 
+<img width="1536" height="1024" alt="ChatGPT Image Dec 4, 2025, 11_41_10 AM" src="https://github.com/user-attachments/assets/e5b584dd-c8f3-4b0b-9c84-4b2b51d45f7a" />
+
+
 A Kubernetes operator that synchronizes configuration from a Git source into target resources on a cluster.
 
 [![Watch a quick demo](https://youtu.be/75jLiJl56Ro/maxresdefault.jpg)](https://youtu.be/75jLiJl56Ro)
