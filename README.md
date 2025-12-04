@@ -46,4 +46,40 @@ MVP notes
  - Build & tooling: `Makefile`, `go` toolchain, `kustomize` for manifests
  - Local testing: `kind` for local Kubernetes clusters, Docker for images
 
-readme in progress.
+
+## Quickstart
+
+1. Create a Kind cluster (or use any Kubernetes cluster):
+
+```bash
+kind create cluster --name config-sync
+```
+
+2. Build the controller image and load it into the Kind cluster:
+
+```bash
+make docker-build IMG=controller:latest
+kind load docker-image controller:latest --name config-sync
+```
+
+3. Install CRDs into the cluster
+```bash
+make install
+```
+
+4. Deploy the controller
+
+```bash
+make deploy IMG=controller:latest
+```
+
+5. Apply the sample `ConfigSync` CR to trigger reconciliation:
+
+```bash
+kubectl apply -f config/samples/configs_v1alpha1_configsync.yaml
+```
+
+Notes:
+- `make install` installs the CRD so Kubernetes recognizes `ConfigSync` resources — run it before applying any `ConfigSync` CRs (and before `make deploy` is safest if you changed CRDs).
+- If you prefer running the controller locally (no image build), run `make install` once, then `make run` to start the controller against your kubeconfig.
+- If you know what you're doing, feel free to read the makefile and any other code to customize it/run it the way you like. I'll open a Discussions page in case anyone has questions for me about this.
