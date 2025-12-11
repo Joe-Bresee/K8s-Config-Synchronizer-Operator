@@ -31,14 +31,21 @@ MVP notes
 
 ## Features
 
-- Watch a configuration source:
-  - Git repository (optionally with SSH or HTTPS authentication)
-- Reconcile resources on a configurable refresh interval
-- Maintain status conditions:
-  - `Available`: configuration successfully applied
-  - `Progressing`: reconciliation is ongoing
-  - `Degraded`: errors detected (invalid source, apply failures, etc.)
-- Apply changes to multiple targets
+### ✅ **Currently Implemented:**
+- **Git Source Integration**: Clone and fetch from Git repositories with SSH/HTTPS authentication
+- **Manifest Application**: Parse and apply YAML manifests to Kubernetes resources
+- **Status Management**: Track sync status with proper Kubernetes conditions (`Degraded`)
+- **Reconciliation Loop**: Configurable refresh intervals with change detection via Git SHA comparison
+- **Multi-Target Support**: Apply configuration to multiple Kubernetes resources from a single source
+- **RBAC**: Proper role-based access controls for cluster operations
+
+### 🚧 **Planned/In-Progress:**
+- **Templating System**: Go template support for dynamic configuration rendering
+- **Enhanced Validation**: Comprehensive YAML/manifest validation before application  
+- **Testing Suite**: Unit tests and integration tests with envtest
+- **Rollback Support**: Revert to previous Git commits
+- **Pruning & Garbage Collection**: Clean up orphaned resources
+- **Multi-Environment Support**: Branch/environment-specific configurations
 
  ## Technologies
 
@@ -50,39 +57,75 @@ MVP notes
  - Local testing: `kind` for local Kubernetes clusters, Docker for images
 
 
+## Project Status
+
+**Current State**: MVP is functional with core GitOps capabilities. The operator can successfully:
+- Clone Git repositories and detect changes
+- Apply Kubernetes manifests to cluster resources
+- Track synchronization status and handle failures
+
+**Development Phase**: Testing and enhancement phase - core functionality works but needs comprehensive testing and additional features.
+
 ## Quickstart
 
-1. Create a Kind cluster (or use any Kubernetes cluster):
+### Prerequisites
+Ensure you have the following tools installed:
+- Go 1.21+
+- Docker
+- kubectl 
+- kind (for local testing)
+- kubebuilder (for development)
 
+### Quick Setup
+
+1. **Create a Kind cluster:**
 ```bash
 kind create cluster --name config-sync
 ```
 
-2. Build the controller image and load it into the Kind cluster:
+2. **Install CRDs and deploy the operator:**
+```bash
+# Install the ConfigSync CRD
+make install
+
+# Run the controller locally (recommended for development)
+make run
+```
+
+**OR** build and deploy as container:
 
 ```bash
+# Build controller image and load into Kind cluster
 make docker-build IMG=controller:latest
 kind load docker-image controller:latest --name config-sync
-```
 
-3. Install CRDs into the cluster
-```bash
-make install
-```
-
-4. Deploy the controller
-
-```bash
+# Deploy the controller
 make deploy IMG=controller:latest
 ```
 
-5. Apply the sample `ConfigSync` CR to trigger reconciliation:
-
+3. **Test with a sample ConfigSync:**
 ```bash
 kubectl apply -f config/samples/configs_v1alpha1_configsync.yaml
 ```
 
-Notes:
-- `make install` installs the CRD so Kubernetes recognizes `ConfigSync` resources — run it before applying any `ConfigSync` CRs (and before `make deploy` is safest if you changed CRDs).
-- If you prefer running the controller locally (no image build), run `make install` once, then `make run` to start the controller against your kubeconfig.
-- If you know what you're doing, feel free to read the makefile and any other code to customize it/run it the way you like. I'll open a Discussions page in case anyone has questions for me about this.
+### Development Commands
+```bash
+# Generate CRDs and code after API changes
+make manifests generate
+
+# Build the project
+make build
+
+# Run tests (requires envtest binaries - see Known Issues)
+make test
+
+# View available targets
+make help
+```
+
+## Known Issues & Limitations
+
+1. **Testing Infrastructure**: Tests require envtest binaries that aren't currently installed. Run `make envtest` to install them.
+2. **Templating**: Go template support is planned but not yet implemented.
+3. **Rollback**: Rollback to previous Git commits is not yet implemented.
+4. **Multi-branch**: Environment-specific branch support is planned.

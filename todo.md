@@ -1,66 +1,110 @@
 # TODO — Config Synchronizer Operator
 
-Generated from `requirements.md` on 2025-11-25.
+**Updated**: December 11, 2025
+**Status**: MVP Core Complete - Testing & Enhancement Phase
 
-This file lists the ordered, actionable implementation steps to build the operator.
+## ✅ COMPLETED ITEMS
 
-1. Initialize Kubebuilder Project
-   - Create base Go/kubebuilder project.
-   - Commands:
-     - `kubebuilder init --domain example.io --repo github.com/<your-org>/config-synchronizer-operator`
-   - Acceptance: `main.go`, `PROJECT`, `config/`, and `api/` exist.
+1. ✅ **Initialize Kubebuilder Project** - Base project structure is in place
+2. ✅ **Define CRD Types** - Full ConfigSync API implemented with proper validation
+3. ✅ **Scaffold Controller** - Controller is wired and functional
+4. ✅ **Implement Source Fetchers** - Git source fetching with SSH/HTTPS auth complete
+5. ✅ **Basic Validation** - YAML parsing and basic validation implemented
+6. ✅ **Apply Targets** - Manifest application with server-side apply working
+7. ✅ **Reconcile Loop & Watches** - Full reconciliation with change detection via Git SHA
+8. ✅ **Basic Status & Conditions** - Status tracking with Degraded condition implemented  
+9. ✅ **RBAC & Manifests** - Proper permissions and deployment manifests generated
 
-2. Define CRD Types
-   - Add `ConfigSync` API types in `api/v1alpha1/configsync_types.go` to match `requirements.md`.
-   - Run: `make generate` and `make manifests`.
-   - Acceptance: CRD YAML contains `ConfigSync` schema in `config/crd`.
+## 🚧 HIGH PRIORITY - NEXT STEPS
 
-3. Scaffold Controller
-   - Generate controller scaffold: `kubebuilder create api --group configs --version v1alpha1 --kind ConfigSync`.
-   - Ensure reconciler is registered in `main.go`.
-   - Acceptance: controller compiles and is wired.
+### 11. **Testing Infrastructure** (CRITICAL)
+- **Issue**: Tests fail due to missing envtest binaries
+- **Actions**:
+  - Install envtest binaries: `make envtest` 
+  - Fix test setup in `suite_test.go`
+  - Add unit tests for Git fetching, manifest parsing, apply logic
+  - Add integration tests with real Git repositories
+- **Files**: `internal/controller/suite_test.go`, `internal/sources/*_test.go`, `internal/apply/*_test.go`
 
-4. Implement Source Fetchers
-   - Create `internal/source` package with `fetch_source(configsync) -> (map[string]any, error)`.
-   - Implement Git fetcher using `go-git` and in-cluster fetchers for `ConfigMap` and `Secret` using controller-runtime client.
+### 12. **Templating System** (HIGH)
+- **Goal**: Support Go templates for dynamic configuration
+- **Actions**:
+  - Create `internal/template/` package
+  - Implement `renderTemplate(data, templateStr) -> renderedData`
+  - Add template parsing and validation
+  - Update controller to use templating before applying manifests
+- **Files**: `internal/template/render.go`, update `configsync_controller.go`
 
-5. Implement Validation
-   - Add `internal/validate` with `validate_config(data) -> error` to ensure YAML/JSON validity.
+### 13. **Enhanced Error Handling** (MEDIUM)
+- **Actions**:
+  - Fix `setCondition` to only update `LastTransitionTime` when status changes
+  - Add Kubernetes event emission for better observability  
+  - Implement retry with exponential backoff
+  - Add more specific condition types (Available, Progressing)
+- **Files**: `configsync_controller.go`
 
-6. Implement Templating
-   - Add `internal/template` with `render_template(data, target) -> data`.
-   - Use Go `text/template` to start; optionally add Jinja2-style behavior later.
+## 📋 MEDIUM PRIORITY
 
-7. Apply Targets
-   - Add `internal/target` with `apply_target(target, data)` to create/patch `ConfigMap`/`Secret` objects.
-   - Respect `overwrite` semantics and preserve unmanaged keys when required.
+### 14. **Validation Enhancements**
+- JSON schema validation for manifests
+- Pre-apply validation checks
+- Template syntax validation
 
-8. Reconcile Loop & Watches
-   - Implement the full reconcile flow: fetch, validate, render, apply, update status.
-   - Add watches for referenced `ConfigMap`/`Secret` objects and implement periodic requeue using `refreshInterval`.
+### 15. **Rollback Support**
+- Add rollback spec field to ConfigSync
+- Implement revert to previous/specific Git SHA
+- Track deployment history
 
-9. Status, Conditions & Events
-   - Implement `.status` updates: `lastSyncedTime`, `sourceRevision`, `appliedTargets`, and `conditions`.
-   - Emit Kubernetes events for success/failure.
+### 16. **Multi-Environment Support** 
+- Branch-specific configurations
+- Environment-based templating
+- Multi-tenancy considerations
+## 📋 LOW PRIORITY / STRETCH GOALS
 
-10. RBAC, Manifests, Deployment
-    - Add RBAC rules in `config/rbac` and operator `Deployment` manifest in `deploy/`.
-    - Add `Dockerfile` and `Makefile` targets for building and pushing the image.
+### 17. **Pruning & Garbage Collection**
+- Track applied resources and clean up orphaned ones
+- Add finalizers for proper cleanup
+- Implement resource ownership tracking
 
-11. Testing & CI
-    - Add unit tests for fetchers, validation, templating, and target apply logic.
-    - Add integration tests with `envtest` and GitHub Actions for `go test`.
+### 18. **Advanced Features**
+- Webhook triggers for Git push events
+- SOPS/KMS encrypted secret support  
+- Multi-cluster sync capabilities
+- Helm chart support
+- Kustomize integration
 
-12. Docs & Examples
-    - Add `README.md` usage examples and example `ConfigSync` manifests under `examples/`.
+### 19. **CI/CD & Documentation**
+- GitHub Actions for automated testing
+- Comprehensive documentation with examples
+- Demo videos and tutorials
 
 ---
 
-Usage
-- Mark progress by editing this file or by using the repository's task tracking workflow.
-- Recommended immediate actions: complete items 1–3 to scaffold the project, then implement 4 (Git fetcher) and 5 (validation).
+## 🚨 CURRENT BLOCKERS & ISSUES
 
-If you'd like, I can scaffold parts of this (CRD types, controller skeleton, or `internal/source`), or follow whichever step you pick next.
+1. **Testing Environment**: envtest binaries missing - prevents running `make test`
+2. **Condition Logic**: `setCondition` updates `LastTransitionTime` on every call (causes status churn)
+3. **Docker Permissions**: Docker group membership requires re-login to take effect
+
+## 🎯 IMMEDIATE NEXT ACTIONS
+
+1. **Fix Testing** (30 min):
+   ```bash
+   make envtest  # Install test binaries
+   go test ./internal/controller/...  # Verify tests pass
+   ```
+
+2. **Implement Basic Templating** (2-3 hours):
+   - Create `internal/template/render.go` 
+   - Add Go text/template support
+   - Update controller to use templating
+
+3. **Add Unit Tests** (1-2 hours):
+   - Git fetcher tests with fixtures
+   - Manifest application tests  
+   - Template rendering tests
+
+**Estimated MVP-to-Production**: ~1-2 weeks of focused development
 
 
 <!-- idea: rollback support -->

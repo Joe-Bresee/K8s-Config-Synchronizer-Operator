@@ -11,62 +11,78 @@ Build a Kubernetes operator that:
 
 ---
 
-## CRD: ConfigSync
-- TODO: I want a more loosely defined CR - right now I need to define a CR target with type deployment if my gitsource has a deployment type - which seems a little tight and unneeded. I am going to spend some time designing the configsync CR a bit more - also nede to think about multiple resource deployments, maybe multi-repo/tenancy/env.
+## CRD: ConfigSync ✅ **IMPLEMENTED**
 
-### spec
-- `source`
-  - `git`:
-    - `repo` (string) — HTTPS/SSH URL
-    - `path` (string) — path to file in repo
-    - `revision` (string, optional, default `main`)
--- `targets` (list)
-- `namespace`
-- `type` `deployment`, etc
-- `name`
-- `key` (optional, for Secret)
-- `refreshInterval` (string, optional)
+The current CR design is flexible and supports the core use cases:
 
-### status
-- `lastSyncedTime`
-- `sourceRevision` (e.g., Git SHA)
-- `appliedTargets` (int)
-- `conditions` (list of conditions: Synced, Failed, InvalidSource)
+### spec ✅ **IMPLEMENTED**
+- ✅ `source.git`: Git source configuration
+  - ✅ `repoURL`: HTTPS/SSH URL to Git repository  
+  - ✅ `path`: Path to configuration files in repository
+  - ✅ `branch`: Git branch to use (optional)
+  - ✅ `revision`: Git revision/commit SHA (optional)
+  - ✅ `authMethod`: Authentication method (ssh/https/none)
+  - ✅ `authSecretRef`: Reference to authentication secret
+- ✅ `targets`: List of target Kubernetes resources
+  - ✅ `namespace`: Target namespace
+  - ✅ `name`: Target resource name  
+  - ✅ `type`: Resource type (ConfigMap/Secret/Deployment)
+- ✅ `refreshInterval`: Reconciliation interval (optional)
+
+### status ✅ **IMPLEMENTED**
+- ✅ `lastSyncedTime`: Timestamp of last sync
+- ✅ `sourceRevision`: Git SHA that was applied
+- ✅ `appliedTargets`: Number of successfully applied targets
+- ✅ `sourcePath`: Path within repository that was applied
+- ✅ `conditions`: Standard Kubernetes conditions (Available, Degraded, etc.)
 
 ---
 
 ## Operator Behavior
 
-### Source Fetching
-- Fetches Git source defined in ConfigSync CR and if remote has a more recent hash, re-syncs repository code with local temp repo.
-- Caches difference for efficiency / in case there's no updates.
+### Source Fetching ✅ **IMPLEMENTED**
+- ✅ Clones Git repositories using go-git library
+- ✅ Supports SSH and HTTPS authentication via Kubernetes secrets
+- ✅ Detects changes by comparing Git SHAs
+- ✅ Caches repositories to avoid unnecessary re-cloning
+- ✅ Handles authentication errors and connection failures
 
-### Templating / Transformation
+### Templating / Transformation 🚧 **PLANNED** 
 - TODO: `render_template(data: dict, target: dict) -> dict`
-- Apply simple variable interpolation
-- Support Jinja2 (Python) or Go templates
-- Optional: allow per-target overrides
+- TODO: Apply simple variable interpolation using Go templates
+- TODO: Support environment-specific overrides
+- TODO: Add validation for template syntax
 
-### Target Application
-- Applies manifest changes to target defined in the ConfigSync CR, returns Errors if any occur - reports success
+### Target Application ✅ **IMPLEMENTED**
+- ✅ Parses YAML manifests from Git source
+- ✅ Applies changes using server-side apply (with dry-run validation)
+- ✅ Handles multi-document YAML files
+- ✅ Reports success/failure per target
 
-### Reconciliation Triggers
-- TODO: On CR create/update/delete
-- On refresh interval
+### Reconciliation Triggers ✅ **IMPLEMENTED**
+- ✅ On ConfigSync CR create/update/delete
+- ✅ On configurable refresh interval
+- ✅ Change detection via Git SHA comparison
 
-### Error Handling
-- Log errors with structured logging
-- Update `.status.conditions` for Synced, Failed, InvalidSource
-- TODO: Emit Kubernetes events
-- TODO: Retry with exponential backoff
+### Error Handling ✅ **PARTIALLY IMPLEMENTED**
+- ✅ Structured logging throughout reconciliation
+- ✅ Status conditions updated (Degraded) on failures
+- ✅ Proper error propagation and reporting
+- TODO: Emit Kubernetes events for better observability
+- TODO: Retry with exponential backoff for transient failures
 
-### TODO: Rollbacks
-- implement rollback functionality to most previous/specific commit SHA.
+### TODO: Rollbacks 🚧 **PLANNED**
+- TODO: Implement rollback functionality to previous/specific commit SHA
+- TODO: Add rollback triggers in ConfigSync spec
 
-### TODO: pruning & garbage collection
+### TODO: Pruning & Garbage Collection 🚧 **PLANNED** 
+- TODO: Track and clean up resources that are no longer in source
+- TODO: Add finalizers for proper cleanup on ConfigSync deletion
 
-### TODO: determine apply semantics
-- is this a server-side apply only, or client side?
+### Apply Semantics ✅ **IMPLEMENTED**
+- ✅ Uses server-side apply for conflict resolution
+- ✅ Dry-run validation before actual application
+- ✅ Proper error handling for validation failures
 
 ---
 
